@@ -1,0 +1,130 @@
+---
+title: "Course Project_Practical Machine Learning"
+author: "GeorgiiC"
+date: "4 August 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+The goal of this project is to predict the manner in which someone does a barbell lift, using data from accelerometers on belt, forearm, arm and dumbell of 6 participants.
+The data is from http://groupware.les.inf.puc-rio.br/har
+and distributed under the Common License Agreement.
+
+## Loading Data
+
+```{r}
+library(caret)
+
+training <- read.csv("pml-training.csv", header = T, sep = ",", dec = ".", stringsAsFactors = F)
+
+testing <- read.csv("pml-testing.csv", header = T, sep = ",", dec = ".", stringsAsFactors = F)
+
+```
+
+## Data Exploration
+# Data Pruning
+As we can see:
+```{r}
+sapply(training[,c(2,4,7)], head)
+print(unique(training$user_name))
+```
+The data has a "nested" structure with multiple timepoints nested in time windows, nested in subjects (N = 6).
+
+First, we need to prune the data, by excluding unneeded character variables, variables with a high number of missing values and variables with zero variance.
+
+```{r}
+# we convert the *classe* variable (col = 160), which is our categorial outcome, to being a factor
+training[,160] <- as.factor(training[,160])
+
+# converting *user_name*  to factor as well
+training[,"user_name"] <- as.factor(training[,"user_name"])
+
+# removing cases in which new_window = "yes"
+training <- training[!training$new_window == "yes",]
+
+# get the class of each var
+class_var <- sapply(training, class)
+print(unique(class_var))
+
+# we remove character variables
+training <- training[,which(!class_var == "character")] 
+
+# As we can see, looking at the first twenty variables, many have a lot of missing values
+sapply(training[,1:20], head)
+
+# Thus, we are going to exclude these variables
+col_indx <- unique(is.na(training))
+training <- training[,!col_indx]
+
+# Last some unnecessary features are dropped
+training <- training[,-c(1:5)]
+
+## Now the same for the testing dataset
+testing[,"user_name"] <- as.factor(testing[,"user_name"])
+testing <- testing[!testing$new_window == "yes",]
+class_var <- sapply(testing, class)
+testing <- testing[,which(!class_var == "character")]
+col_indx <- unique(is.na(testing))
+testing <- testing[,!col_indx]
+testing <- testing[,-c(1:5)]
+```
+
+## Splitting the data into a train and test set
+```{r}
+set.seed(1788)
+inTrain <- createDataPartition(training$classe, p = .75, list = F)
+train <- training[inTrain,]
+test <- training[-inTrain,]
+```
+## Training
+For the cross-validation, we use k-fold crossvalidation (10 folds). And we preprocess our data by standardizing it.
+
+```{r}
+library(rattle)
+set.seed(1788)
+tctrl <- trainControl(method = "cv", number = 10)
+model_rf <- train(classe~., data = train, method = "rf", trControl = tctrl, preProcess = c("center", "scale"))
+
+print(model_rf)
+print(model_rf$finalModel)
+
+# And the most important Vars
+MostImpVars <- varImp(model_rf)
+MostImpVars
+```
+
+As we can see the model obtained by random forests (10-fold cross-validation) yields an accuracy for the optimal model (with 27 trees) of 99.5%.
+The estimated out of bag error is 0.45%.
+
+## Testing
+Now we want to test our model on the testing data and compute the accuracy by looking at the confusion matrix.
+
+```{r}
+# compute accuracy
+pred_cv <- predict(model_rf, newdata = test)
+
+ConfMat <- confusionMatrix(test$classe, pred_cv)
+ConfMat$table
+
+ConfMat$overall[1]
+
+# compute OOB error
+OOB_test <- ConfMat$overall[1]
+names(OOB_test) <- "OOB error"
+OOB_test <- 1 - OOB_test
+OOB_test
+
+```
+
+As we can see our model performed very well  on the test set.
+
+## Unseen data (validation set)
+Now we want to predict 20 unseen cases
+```{r}
+testpred <- predict(model_rf, newdata = testing)
+testpred
+```

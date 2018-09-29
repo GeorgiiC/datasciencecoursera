@@ -1,0 +1,27 @@
+---
+title: "ProgrammingAssignment_Map_GC"
+author: "GeorgiiC"
+date: "4 September 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r, comment=FALSE, message=FALSE}
+library(leaflet)
+library(ggmap)
+gc <- geocode('Hellbrunner Str. 34, 5020 Salzburg')
+df <- data.frame(name = 'Salzburg', lat = gc[2], 
+                 lng = gc[1])
+icon <- awesomeIcons(icon = "angellist", library = "fa", markerColor = "lightgreen", spin = TRUE)
+
+map <- df %>%
+    leaflet() %>%
+    addTiles() %>%
+    addAwesomeMarkers(lng = as.numeric(gc)[1], lat = as.numeric(gc)[2], icon = icon, label = 'University of Salzburg')
+map
+```
+
